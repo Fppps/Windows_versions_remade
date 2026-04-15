@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windows 1.0 Simulator</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        :root {
+            --win-blue: #0000AA;
+            --win-black: #000000;
+            --win-white: #FFFFFF;
+            --win-cyan: #00AAAA;
+            --font-main: 'Fixedsys', 'Fixedsys Excelsior', 'VT323', 'Courier New', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: var(--win-black);
+            font-family: var(--font-main);
+            font-size: 18px;
+            color: var(--win-white);
+            -webkit-font-smoothing: none; /* Makes the font crispy and pixelated */
+            font-smooth: never;
+        }
+
+        /* --- Boot Screen --- */
+        #boot-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            padding: 20px;
+            background: var(--win-black);
+            z-index: 10000;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        #mobile-input {
+            position: absolute;
+            opacity: 0;
+            top: -1000px;
+        }
+        
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 18px;
+            background-color: var(--win-white);
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        /* --- Splash Screen --- */
+        #splash-screen {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--win-blue);
+            color: var(--win-white);
+            z-index: 9999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .splash-version {
+            font-size: 20px;
+            margin-bottom: 80px;
+            line-height: 1.5;
+        }
+
+        .splash-copy {
+            font-size: 16px;
+            line-height: 1.5;
+            position: absolute;
+            bottom: 50px;
+        }
+
+        /* --- Desktop --- */
+        #desktop {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--win-blue);
+            cursor: crosshair; /* Classic early GUI cursor */
+        }
+
+        /* --- Window Styles --- */
+        .window {
+            position: absolute;
+            background: var(--win-white);
+            color: var(--win-black);
+            border: 2px solid var(--win-black);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+            min-width: 250px;
+            min-height: 150px;
+        }
+
+        .title-bar {
+            background: var(--win-black);
+            color: var(--win-white);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 24px;
+            border-bottom: 2px solid var(--win-black);
+        }
+
+        .window.inactive .title-bar {
+            background: var(--win-white);
+            color: var(--win-black);
+        }
+
+        .title-bar-text {
+            flex-grow: 1;
+            text-align: center;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: default;
+        }
+
+        .sys-box, .size-box {
+            width: 24px;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: var(--win-white);
+            color: var(--win-black);
+            border-left: 2px solid var(--win-black);
+            border-right: 2px solid var(--win-black);
+            cursor: pointer;
+            font-size: 14px;
+            position: relative; /* Added for dropdown support */
+        }
+
+        .sys-box { border-left: none; }
+        .size-box { border-right: none; }
+
+        .sys-box:active, .size-box:active, .sys-box.active-menu {
+            background: var(--win-black);
+            color: var(--win-white);
+        }
+
+        /* System Menu Dropdown */
+        .sys-dropdown {
+            display: none;
+            position: absolute;
+            top: 24px;
+            left: -2px;
+            background: var(--win-white);
+            border: 2px solid var(--win-black);
+            color: var(--win-black);
+            min-width: 120px;
+            z-index: 1000;
+            flex-direction: column;
+            text-align: left;
+            font-family: var(--font-main);
+        }
+
+        .sys-box.active-menu .sys-dropdown {
+            display: flex;
+        }
+
+        .sys-dropdown .dropdown-item {
+            background: var(--win-white);
+            color: var(--win-black);
+        }
+
+        .sys-dropdown .dropdown-item:hover {
+            background: var(--win-black);
+            color: var(--win-white);
+        }
+
+        .menu-bar {
+            display: flex;
+            background: var(--win-white);
+            border-bottom: 2px solid var(--win-black);
+            padding: 0 5px;
+        }
+
+        .menu-item {
+            padding: 2px 8px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .menu-item:hover {
+            background: var(--win-black);
+            color: var(--win-white);
+        }
+
+        .dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: var(--win-white);
+            border: 2px solid var(--win-black);
+            color: var(--win-black);
+            min-width: 120px;
+            z-index: 100;
+            flex-direction: column;
+        }
+
+        .menu-item:hover .dropdown, .menu-item.active .dropdown {
+            display: flex;
+        }
+
+        .dropdown-item {
+            padding: 4px 10px;
+            cursor: pointer;
+        }
+
+        .dropdown-item:hover {
+            background: var(--win-black);
+            color: var(--win-white);
+        }
+
+        .content-area {
+            flex-grow: 1;
+            overflow: auto;
+            position: relative;
+            background: var(--win-white);
+        }
+
+        /* --- Specific Apps --- */
+        /* MS-DOS Executive */
+        .file-list {
+            padding: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 15px;
+        }
+        
+        .file-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 80px;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .file-icon {
+            width: 32px;
+            height: 32px;
+            border: 2px solid var(--win-black);
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+        }
+
+        .file-item:active .file-icon, .file-item:active .file-name {
+            background: var(--win-black);
+            color: var(--win-white);
+        }
+
+        .file-item.selected .file-icon, .file-item.selected .file-name {
+            background: var(--win-black);
+            color: var(--win-white);
+        }
+
+        /* MS-DOS Executive Views */
+        .file-list.view-long {
+            flex-direction: column;
+            gap: 2px;
+        }
+        .file-list.view-long .file-item {
+            flex-direction: row;
+            width: 100%;
+            padding: 2px;
+        }
+        .file-list.view-long .file-icon {
+            display: none; /* Hide icon in long view for an authentic text-list look */
+        }
+        .file-list.view-long .file-name {
+            width: 120px;
+            text-align: left;
+        }
+        .file-details {
+            display: none;
+            flex-grow: 1;
+            justify-content: space-between;
+            padding-right: 20px;
+            cursor: pointer;
+        }
+        .file-list.view-long .file-details {
+            display: flex;
+        }
+        
+        .file-item:active .file-details, .file-item.selected .file-details {
+            background: var(--win-black);
+            color: var(--win-white);
+        }
+
+        /* Paint App */
+        .paint-toolbar {
+            display: flex; gap: 5px; padding: 5px;
+            border-bottom: 2px solid var(--win-black);
+            background: var(--win-white);
+        }
+        .color-btn {
+            width: 20px; height: 20px;
+            border: 2px solid var(--win-black);
+            cursor: pointer;
+        }
+        .paint-canvas {
+            display: block;
+            touch-action: none;
+        }
+
+        /* Notepad */
+        textarea.notepad-input {
+            width: 100%;
+            height: 100%;
+            border: none;
+            outline: none;
+            resize: none;
+            font-family: var(--font-main);
+            font-size: 18px;
+            padding: 5px;
+            background: var(--win-white);
+            color: var(--win-black);
+        }
+
+        /* Calculator */
+        .calc-display {
+            width: 100%;
+            height: 40px;
+            background: var(--win-white);
+            border-bottom: 2px solid var(--win-black);
+            text-align: right;
+            padding: 5px 10px;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        .calc-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2px;
+            background: var(--win-black);
+            padding: 2px;
+            flex-grow: 1;
+        }
+
+        .calc-btn {
+            background: var(--win-white);
+            border: none;
+            font-family: var(--font-main);
+            font-size: 20px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .calc-btn:active {
+            background: var(--win-black);
+            color: var(--win-white);
+        }
+
+        /* Clock */
+        .clock-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            padding: 10px;
+        }
+
+        /* Minimized Shelf */
+        #icon-shelf {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            gap: 15px;
+            pointer-events: none;
+        }
+
+        .minimized-icon {
+            width: 50px;
+            height: 50px;
+            background: var(--win-cyan);
+            border: 2px solid var(--win-black);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            cursor: pointer;
+            box-shadow: 2px 2px 0 var(--win-black);
+        }
+
+        .minimized-icon span {
+            background: var(--win-white);
+            color: var(--win-black);
+            font-size: 12px;
+            padding: 0 2px;
+            margin-top: 2px;
+            max-width: 44px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .minimized-icon:active {
+            background: var(--win-black);
+            color: var(--win-white);
+            border-color: var(--win-white);
+        }
+
+        /* MS-DOS Prompt App */
+        .dos-container {
+            background: var(--win-black);
+            color: #CCCCCC;
+            font-family: var(--font-main);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            padding: 5px;
+            overflow-y: auto;
+            cursor: text;
+        }
+        
+        .dos-output {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .dos-input-line {
+            display: flex;
+            align-items: center;
+        }
+
+        .dos-input {
+            background: transparent;
+            border: none;
+            color: #CCCCCC;
+            outline: none;
+            flex-grow: 1;
+            font-family: inherit;
+            font-size: inherit;
+            caret-color: #CCCCCC;
+            margin-left: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- DOS Boot Screen -->
+    <div id="boot-screen" onclick="if(window.isWaitingForInput) document.getElementById('mobile-input').focus()">
+        <span id="boot-text"></span><span class="cursor"></span>
+        <input type="text" id="mobile-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    </div>
+
+    <!-- Windows Splash Screen -->
+    <div id="splash-screen">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/01/Windows_logo_and_wordmark_-_%281985-1989%29.svg/1280px-Windows_logo_and_wordmark_-_%281985-1989%29.svg.png" alt="Windows 1.0 Logo" style="max-width: 400px; margin-bottom: 40px; background-color: var(--win-white); padding: 20px; border: 4px solid var(--win-black);">
+        <div class="splash-version">
+            Microsoft Windows<br>Version 1.0
+        </div>
+        <div class="splash-copy">
+            Copyright (c) Microsoft Corporation, 1985. All Rights Reserved.<br>
+            Microsoft is a registered trademark of Microsoft Corp.
+        </div>
+    </div>
+
+    <!-- Windows Desktop -->
+    <div id="desktop">
+        <div id="icon-shelf"></div>
+    </div>
+
+    <script>
+        // --- Boot Sequence Logic ---
+        const bootTextElement = document.getElementById('boot-text');
+        const bootScreen = document.getElementById('boot-screen');
+        const desktop = document.getElementById('desktop');
+        const mobileInput = document.getElementById('mobile-input');
+        
+        const bootSequence = [
+            "Phoenix ROM BIOS PLUS Version 1.10 A04",
+            "Copyright (C) 1985 Phoenix Software Associates Ltd.",
+            "All Rights Reserved",
+            "",
+            "640K Base Memory",
+            "000K Extended Memory",
+            "",
+            "Starting MS-DOS...",
+            "",
+            "C:\\>cd WINDOWS"
+        ];
+
+        let lineIndex = 0;
+        let charIndex = 0;
+        let currentLine = "";
+        let dosHistoryHTML = "";
+        
+        window.isWaitingForInput = false;
+
+        function typeBootSequence() {
+            if (lineIndex < bootSequence.length) {
+                const line = bootSequence[lineIndex];
+                
+                if (lineIndex === bootSequence.length - 1) {
+                    // Type out 'cd WINDOWS'
+                    if (charIndex < line.length) {
+                        currentLine += line.charAt(charIndex);
+                        bootTextElement.innerHTML = dosHistoryHTML + currentLine;
+                        charIndex++;
+                        setTimeout(typeBootSequence, 50 + Math.random() * 100);
+                    } else {
+                        dosHistoryHTML += currentLine + "\n";
+                        currentLine = "";
+                        charIndex = 0;
+                        lineIndex++;
+                        setTimeout(typeBootSequence, 300);
+                    }
+                } else {
+                    // Instantly print BIOS lines
+                    dosHistoryHTML += line + "\n";
+                    bootTextElement.innerHTML = dosHistoryHTML;
+                    lineIndex++;
+                    setTimeout(typeBootSequence, 100);
+                }
+            } else {
+                // Done booting, show prompt
+                dosHistoryHTML += "C:\\WINDOWS>";
+                bootTextElement.innerHTML = dosHistoryHTML;
+                window.isWaitingForInput = true;
+                mobileInput.value = "";
+                mobileInput.focus();
+            }
+        }
+
+        // Handle DOS input
+        mobileInput.addEventListener('input', () => {
+            if (!window.isWaitingForInput) return;
+            bootTextElement.innerHTML = dosHistoryHTML + mobileInput.value;
+        });
+
+        mobileInput.addEventListener('keydown', (e) => {
+            if (!window.isWaitingForInput) return;
+            
+            if (e.key === "Enter") {
+                const val = mobileInput.value;
+                dosHistoryHTML += val + "\n";
+                if (val.trim().toLowerCase() === "win") {
+                    window.isWaitingForInput = false;
+                    mobileInput.blur();
+                    startWindows();
+                } else {
+                    if (val.trim() !== "") {
+                        dosHistoryHTML += "Bad command or file name\n";
+                    }
+                    dosHistoryHTML += "\nC:\\WINDOWS>";
+                    mobileInput.value = "";
+                    bootTextElement.innerHTML = dosHistoryHTML;
+                }
+            }
+        });
+
+        // Keep focus if clicking around while waiting
+        document.addEventListener('keydown', () => {
+            if (window.isWaitingForInput && document.activeElement !== mobileInput) {
+                mobileInput.focus();
+            }
+        });
+
+        function startWindows() {
+            bootScreen.style.display = 'none';
+            const splashScreen = document.getElementById('splash-screen');
+            splashScreen.style.display = 'flex';
+            
+            // Wait 3 seconds on splash screen, then show desktop
+            setTimeout(() => {
+                splashScreen.style.display = 'none';
+                desktop.style.display = 'block';
+                initDesktop();
+            }, 3000);
+        }
+
+        // Start Boot
+        window.onload = () => {
+            setTimeout(typeBootSequence, 1000);
+        };
+
+        // --- Window Manager Logic ---
+        const windows = [];
+        window.virtualFS = {};
+        window.systemFiles = [
+            { name: 'CALC.EXE', icon: 'C', size: '24576', date: '11-01-85  12:00p', run: () => createCalculator() },
+            { name: 'CLOCK.EXE', icon: 'O', size: '12416', date: '11-01-85  12:00p', run: () => createClock() },
+            { name: 'COMMAND.COM', icon: '>', size: '23210', date: '11-01-85  12:00p', run: () => createCommandPrompt() },
+            { name: 'NOTEPAD.EXE', icon: 'N', size: '17824', date: '11-01-85  12:00p', run: () => createNotepad() },
+            { name: 'PAINT.EXE', icon: 'P', size: '42112', date: '11-01-85  12:00p', run: () => createPaint() },
+            { name: 'WRITE.EXE', icon: 'W', size: '54208', date: '11-01-85  12:00p', run: () => createNotepad() }
+        ];
+
+        function initDesktop() {
+            createMSDOSExecutive();
+        }
+
+        function focusWindow(winElement) {
+            // Set all inactive
+            document.querySelectorAll('.window').forEach(w => w.classList.add('inactive'));
+            // Set current active
+            winElement.classList.remove('inactive');
+        }
+
+        function tileWindows() {
+            const activeWindows = windows.filter(w => w.style.display !== 'none');
+            const numWindows = activeWindows.length;
+            if (numWindows === 0) return;
+
+            const shelfHeight = 60;
+            const desktopWidth = window.innerWidth;
+            const desktopHeight = window.innerHeight - shelfHeight;
+
+            // Check for a maximized window
+            const maximizedWindow = activeWindows.find(w => w.isMaximized);
+
+            if (maximizedWindow) {
+                activeWindows.forEach(win => {
+                    if (win === maximizedWindow) {
+                        win.style.left = '0px';
+                        win.style.top = '0px';
+                        win.style.width = desktopWidth + 'px';
+                        win.style.height = desktopHeight + 'px';
+                        win.style.zIndex = 20;
+                        win.style.visibility = 'visible';
+                    } else {
+                        win.style.visibility = 'hidden'; // Hide others
+                    }
+                });
+            } else {
+                // Tiling mode
+                // Mobile gets stacked rows, Desktop gets side-by-side columns
+                const isMobile = desktopWidth < 600 || desktopHeight > desktopWidth;
+                
+                if (isMobile) {
+                    const wHeight = desktopHeight / numWindows;
+                    activeWindows.forEach((win, index) => {
+                        win.style.visibility = 'visible';
+                        win.style.left = '0px';
+                        win.style.top = (index * wHeight) + 'px';
+                        win.style.width = desktopWidth + 'px';
+                        win.style.height = wHeight + 'px';
+                        win.style.zIndex = 10;
+                    });
+                } else {
+                    const wWidth = desktopWidth / numWindows;
+                    activeWindows.forEach((win, index) => {
+                        win.style.visibility = 'visible';
+                        win.style.left = (index * wWidth) + 'px';
+                        win.style.top = '0px';
+                        win.style.width = wWidth + 'px';
+                        win.style.height = desktopHeight + 'px';
+                        win.style.zIndex = 10;
+                    });
+                }
+            }
+        }
+
+        window.addEventListener('resize', tileWindows);
+
+        function createWindow(title, contentHTML, width, height, x, y, menuConfig = []) {
+            const win = document.createElement('div');
+            win.className = 'window inactive';
+            win.isMaximized = false;
+
+            // Menus HTML
+            let menusHTML = '';
+            if (menuConfig.length > 0) {
+                menusHTML = '<div class="menu-bar">';
+                menuConfig.forEach(menu => {
+                    let itemsHTML = menu.items.map(item => `<div class="dropdown-item" data-action="${item.action}">${item.label}</div>`).join('');
+                    menusHTML += `
+                        <div class="menu-item">
+                            ${menu.label}
+                            <div class="dropdown">${itemsHTML}</div>
+                        </div>
+                    `;
+                });
+                menusHTML += '</div>';
+            }
+
+            win.innerHTML = `
+                <div class="title-bar">
+                    <div class="sys-box">
+                        ≡
+                        <div class="sys-dropdown">
+                            <div class="dropdown-item sys-min">Minimize</div>
+                            <div class="dropdown-item sys-close">Close</div>
+                        </div>
+                    </div>
+                    <div class="title-bar-text">${title}</div>
+                    <div class="size-box">↕</div>
+                </div>
+                ${menusHTML}
+                <div class="content-area">${contentHTML}</div>
+            `;
+
+            desktop.appendChild(win);
+            windows.push(win);
+
+            focusWindow(win);
+            tileWindows();
+
+            // Focus on click anywhere in window
+            win.addEventListener('mousedown', () => focusWindow(win));
+
+            // System Box (System Menu)
+            const sysBox = win.querySelector('.sys-box');
+            
+            const closeWindow = () => {
+                win.remove();
+                const index = windows.indexOf(win);
+                if (index > -1) windows.splice(index, 1);
+                tileWindows();
+            };
+
+            sysBox.addEventListener('click', (e) => {
+                if (e.target.classList.contains('sys-close')) {
+                    closeWindow();
+                } else if (e.target.classList.contains('sys-min')) {
+                    win.style.display = 'none';
+                    sysBox.classList.remove('active-menu');
+                    createMinimizedIcon(title, win);
+                    tileWindows();
+                } else {
+                    // Close other sys menus first
+                    document.querySelectorAll('.sys-box').forEach(b => {
+                        if (b !== sysBox) b.classList.remove('active-menu');
+                    });
+                    sysBox.classList.toggle('active-menu');
+                }
+            });
+
+            sysBox.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                closeWindow();
+            });
+
+            // Close sys menu if clicking outside
+            document.addEventListener('click', (e) => {
+                if (!sysBox.contains(e.target)) {
+                    sysBox.classList.remove('active-menu');
+                }
+            });
+
+            // Size Box (Toggle Maximize)
+            win.querySelector('.size-box').addEventListener('click', () => {
+                win.isMaximized = !win.isMaximized;
+                tileWindows();
+            });
+
+            // Menu Bindings
+            if (menuConfig.length > 0) {
+                win.querySelectorAll('.dropdown-item:not(.sys-close):not(.sys-min)').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        const action = e.target.getAttribute('data-action');
+                        handleMenuAction(action, win, title);
+                    });
+                });
+            }
+
+            return win;
+        }
+
+        function createMinimizedIcon(title, winElement) {
+            const shelf = document.getElementById('icon-shelf');
+            const icon = document.createElement('div');
+            icon.className = 'minimized-icon';
+            icon.innerHTML = `<div>🖴</div><span>${title.substring(0, 6)}</span>`;
+            
+            icon.addEventListener('click', () => {
+                winElement.style.display = 'flex';
+                focusWindow(winElement);
+                icon.remove();
+                tileWindows();
+            });
+
+            shelf.appendChild(icon);
+        }
+
+        // --- Application Handlers ---
+
+        function handleMenuAction(action, winElement, appType) {
+            if (appType.startsWith('Notepad')) {
+                const textarea = winElement.querySelector('textarea');
+                let currentFilename = winElement.dataset.filename || 'UNTITLED.TXT';
+
+                if (action === 'new') {
+                    textarea.value = '';
+                    winElement.dataset.filename = 'UNTITLED.TXT';
+                    winElement.querySelector('.title-bar-text').innerText = 'Notepad - UNTITLED.TXT';
+                }
+                if (action === 'open') {
+                    const dialogHtml = `
+                        <div style="padding: 10px; display: flex; flex-direction: column; gap: 10px; background: var(--win-white); color: var(--win-black); height: 100%;">
+                            <div>Open File Name:</div>
+                            <input type="text" id="open-filename" style="background: var(--win-white); color: var(--win-black); border: 2px solid var(--win-black); font-family: inherit; font-size: inherit; text-transform: uppercase;">
+                            <div style="display: flex; gap: 10px;">
+                                <button id="btn-ok" class="calc-btn" style="border: 2px solid var(--win-black); padding: 2px 10px; font-size: 16px;">Open</button>
+                                <button id="btn-cancel" class="calc-btn" style="border: 2px solid var(--win-black); padding: 2px 10px; font-size: 16px;">Cancel</button>
+                            </div>
+                        </div>
+                    `;
+                    const dialog = createWindow('Open', dialogHtml, 250, 140, 200, 200, []);
+                    dialog.querySelector('#btn-ok').onclick = () => {
+                        let fname = dialog.querySelector('#open-filename').value.toUpperCase();
+                        if (!fname.includes('.')) fname += '.TXT';
+                        
+                        if (window.virtualFS[fname] !== undefined) {
+                            textarea.value = window.virtualFS[fname];
+                            winElement.dataset.filename = fname;
+                            winElement.querySelector('.title-bar-text').innerText = 'Notepad - ' + fname;
+                        } else {
+                            alert("File not found on virtual disk.");
+                        }
+                        dialog.querySelector('.sys-close').click();
+                    };
+                    dialog.querySelector('#btn-cancel').onclick = () => dialog.querySelector('.sys-close').click();
+                }
+                if (action === 'save') {
+                    const dialogHtml = `
+                        <div style="padding: 10px; display: flex; flex-direction: column; gap: 10px; background: var(--win-white); color: var(--win-black); height: 100%;">
+                            <div>Save File Name:</div>
+                            <input type="text" id="save-filename" value="${currentFilename}" style="background: var(--win-white); color: var(--win-black); border: 2px solid var(--win-black); font-family: inherit; font-size: inherit; text-transform: uppercase;">
+                            <div style="display: flex; gap: 10px;">
+                                <button id="btn-ok" class="calc-btn" style="border: 2px solid var(--win-black); padding: 2px 10px; font-size: 16px;">Save</button>
+                                <button id="btn-cancel" class="calc-btn" style="border: 2px solid var(--win-black); padding: 2px 10px; font-size: 16px;">Cancel</button>
+                            </div>
+                        </div>
+                    `;
+                    const dialog = createWindow('Save', dialogHtml, 250, 140, 200, 200, []);
+                    dialog.querySelector('#btn-ok').onclick = () => {
+                        let fname = dialog.querySelector('#save-filename').value.toUpperCase();
+                        if (!fname.includes('.')) fname += '.TXT';
+                        
+                        window.virtualFS[fname] = textarea.value;
+                        winElement.dataset.filename = fname;
+                        winElement.querySelector('.title-bar-text').innerText = 'Notepad - ' + fname;
+                        dialog.querySelector('.sys-close').click();
+                        
+                        // Add to simulated file system and refresh DOS Executive
+                        if (!window.systemFiles.find(f => f.name === fname)) {
+                            window.systemFiles.push({
+                                name: fname, icon: 'T', size: textarea.value.length.toString(), date: '11-01-85  12:00p', run: () => createNotepad(fname, window.virtualFS[fname])
+                            });
+                            if (window.renderMSDOSFiles) window.renderMSDOSFiles();
+                        } else {
+                            const f = window.systemFiles.find(f => f.name === fname);
+                            f.size = textarea.value.length.toString();
+                            if (window.renderMSDOSFiles) window.renderMSDOSFiles();
+                        }
+                    };
+                    dialog.querySelector('#btn-cancel').onclick = () => dialog.querySelector('.sys-close').click();
+                }
+                if (action === 'time') {
+                    const now = new Date();
+                    textarea.value += `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')} ${now.toLocaleDateString()}\n`;
+                }
+                if (action === 'exit') winElement.querySelector('.sys-close').click();
+            } else if (appType === 'MS-DOS Executive') {
+                if (action === 'run') {
+                    const selectedItem = winElement.querySelector('.file-item.selected');
+                    if (selectedItem) {
+                        selectedItem.dispatchEvent(new MouseEvent('dblclick'));
+                    } else {
+                        const filename = prompt("Run:", "");
+                        if(filename) alert("Cannot find " + filename + ". Make sure you type the name correctly.");
+                    }
+                }
+                if (action === 'short') {
+                    winElement.querySelector('.file-list').className = 'file-list view-short';
+                }
+                if (action === 'long') {
+                    winElement.querySelector('.file-list').className = 'file-list view-long';
+                }
+                if (action === 'exit') winElement.querySelector('.sys-close').click();
+            } else if (appType === 'Paint') {
+                if (action === 'new') {
+                    const canvas = winElement.querySelector('canvas');
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+                if (action === 'exit') winElement.querySelector('.sys-close').click();
+            }
+        }
+
+        // --- Apps ---
+
+        function createMSDOSExecutive() {
+            let html = `<div id="msdos-file-list" class="file-list view-short"></div>`;
+
+            const menus = [
+                { label: 'File', items: [{ label: 'Run...', action: 'run' }, { label: 'Exit', action: 'exit' }] },
+                { label: 'View', items: [{ label: 'Short', action: 'short' }, { label: 'Long', action: 'long' }] }
+            ];
+
+            const win = createWindow('MS-DOS Executive', html, 400, 300, 50, 50, menus);
+
+            window.renderMSDOSFiles = () => {
+                const listContainer = win.querySelector('#msdos-file-list');
+                if (!listContainer) return;
+                
+                let fileHtml = '';
+                // Sort alphabetically before rendering
+                window.systemFiles.sort((a,b) => a.name.localeCompare(b.name)).forEach((f, i) => {
+                    fileHtml += `
+                        <div class="file-item" id="file-${i}">
+                            <div class="file-icon">${f.icon}</div>
+                            <div class="file-name">${f.name}</div>
+                            <div class="file-details">
+                                <span>${f.size}</span>
+                                <span>${f.date}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                listContainer.innerHTML = fileHtml;
+
+                let selectedItem = null;
+                window.systemFiles.forEach((f, i) => {
+                    const el = win.querySelector(`#file-${i}`);
+                    
+                    el.addEventListener('click', () => {
+                        if (selectedItem) selectedItem.classList.remove('selected');
+                        selectedItem = el;
+                        el.classList.add('selected');
+                    });
+
+                    el.addEventListener('dblclick', f.run);
+
+                    let lastTap = 0;
+                    el.addEventListener('touchend', (e) => {
+                        const currentTime = new Date().getTime();
+                        const tapLength = currentTime - lastTap;
+                        if (tapLength < 500 && tapLength > 0) {
+                            f.run();
+                            e.preventDefault(); 
+                        }
+                        lastTap = currentTime;
+                    });
+                });
+            };
+
+            window.renderMSDOSFiles();
+        }
+
+        function createCommandPrompt() {
+            const html = `
+                <div class="dos-container">
+                    <div class="dos-output">Microsoft(R) MS-DOS(R) Version 3.10<br>(C)Copyright Microsoft Corp 1981-1985.<br><br></div>
+                    <div class="dos-input-line">
+                        <span class="dos-prompt">C:\\WINDOWS&gt;</span>
+                        <input type="text" class="dos-input" autocomplete="off" spellcheck="false">
+                    </div>
+                </div>
+            `;
+            const win = createWindow('Command Prompt', html, 450, 300, 100, 100, []);
+            
+            const container = win.querySelector('.dos-container');
+            const output = win.querySelector('.dos-output');
+            const input = win.querySelector('.dos-input');
+
+            // Focus input on click
+            container.addEventListener('click', () => input.focus());
+            setTimeout(() => input.focus(), 100);
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const cmd = input.value;
+                    const cmdLower = cmd.trim().toLowerCase();
+                    let response = "";
+
+                    // Echo the command
+                    output.innerHTML += `C:\\WINDOWS&gt;${cmd}\n`;
+
+                    if (cmdLower === 'dir') {
+                        let fileListStr = "\n Volume in drive C has no label\n Directory of  C:\\WINDOWS\n\n";
+                        let totalSize = 0;
+                        window.systemFiles.forEach(f => {
+                            let nameParts = f.name.split('.');
+                            let fname = (nameParts[0] || '').padEnd(8, ' ');
+                            let ext = (nameParts[1] || '').padEnd(3, ' ');
+                            fileListStr += `${fname}  ${ext}\n`;
+                            totalSize += parseInt(f.size) || 0;
+                        });
+                        fileListStr += `       ${window.systemFiles.length} File(s)  ${Math.max(0, 123456 - totalSize)} bytes free\n`;
+                        response = fileListStr;
+                    } else if (cmdLower === 'cls') {
+                        output.innerHTML = "";
+                        input.value = "";
+                        return;
+                    } else if (cmdLower === 'exit') {
+                        win.querySelector('.sys-close').click();
+                        return;
+                    } else if (cmdLower.startsWith('echo ')) {
+                        response = cmd.substring(5) + "\n";
+                    } else if (cmdLower === 'ver') {
+                        response = "MS-DOS Version 3.10\n";
+                    } else if (cmdLower === 'win') {
+                        response = "Windows is already running.\n";
+                    } else if (cmdLower === '') {
+                        response = "";
+                    } else {
+                        response = "Bad command or file name\n";
+                    }
+
+                    if (response) {
+                        output.innerHTML += response;
+                    }
+                    
+                    input.value = "";
+                    container.scrollTop = container.scrollHeight;
+                }
+            });
+        }
+
+        function createNotepad(initialFilename = 'UNTITLED.TXT', initialContent = '') {
+            const html = `<textarea class="notepad-input" spellcheck="false">${initialContent}</textarea>`;
+            const menus = [
+                { label: 'File', items: [{ label: 'New', action: 'new' }, { label: 'Open...', action: 'open' }, { label: 'Save', action: 'save' }, { label: 'Save As...', action: 'save' }, { label: 'Exit', action: 'exit' }] },
+                { label: 'Edit', items: [{ label: 'Time/Date', action: 'time' }] }
+            ];
+            const win = createWindow(`Notepad - ${initialFilename}`, html, 350, 250, 150, 100, menus);
+            win.dataset.filename = initialFilename;
+        }
+
+        function createCalculator() {
+            const html = `
+                <div style="display: flex; flex-direction: column; height: 100%;">
+                    <div class="calc-display" id="calc-display">0</div>
+                    <div class="calc-grid">
+                        <button class="calc-btn" onclick="calcInput('7')">7</button>
+                        <button class="calc-btn" onclick="calcInput('8')">8</button>
+                        <button class="calc-btn" onclick="calcInput('9')">9</button>
+                        <button class="calc-btn" onclick="calcOp('/')">/</button>
+                        
+                        <button class="calc-btn" onclick="calcInput('4')">4</button>
+                        <button class="calc-btn" onclick="calcInput('5')">5</button>
+                        <button class="calc-btn" onclick="calcInput('6')">6</button>
+                        <button class="calc-btn" onclick="calcOp('*')">*</button>
+                        
+                        <button class="calc-btn" onclick="calcInput('1')">1</button>
+                        <button class="calc-btn" onclick="calcInput('2')">2</button>
+                        <button class="calc-btn" onclick="calcInput('3')">3</button>
+                        <button class="calc-btn" onclick="calcOp('-')">-</button>
+                        
+                        <button class="calc-btn" onclick="calcClear()">C</button>
+                        <button class="calc-btn" onclick="calcInput('0')">0</button>
+                        <button class="calc-btn" onclick="calcEq()">=</button>
+                        <button class="calc-btn" onclick="calcOp('+')">+</button>
+                    </div>
+                </div>
+            `;
+            const win = createWindow('Calculator', html, 250, 280, 200, 150, []);
+            
+            // Attach to global for inline onclick
+            window.calcDisplayEl = win.querySelector('#calc-display');
+            window.calcCurrent = '0';
+            window.calcPrev = null;
+            window.calcOperator = null;
+            window.calcResetNext = false;
+        }
+
+        // Global Calculator logic
+        window.calcInput = function(num) {
+            if (window.calcResetNext) {
+                window.calcCurrent = num;
+                window.calcResetNext = false;
+            } else {
+                window.calcCurrent = window.calcCurrent === '0' ? num : window.calcCurrent + num;
+            }
+            window.calcDisplayEl.innerText = window.calcCurrent;
+        };
+
+        window.calcOp = function(op) {
+            if (window.calcPrev !== null && !window.calcResetNext) {
+                window.calcEq();
+            }
+            window.calcPrev = window.calcCurrent;
+            window.calcOperator = op;
+            window.calcResetNext = true;
+        };
+
+        window.calcEq = function() {
+            if (window.calcOperator && window.calcPrev !== null) {
+                let a = parseFloat(window.calcPrev);
+                let b = parseFloat(window.calcCurrent);
+                let res = 0;
+                switch(window.calcOperator) {
+                    case '+': res = a + b; break;
+                    case '-': res = a - b; break;
+                    case '*': res = a * b; break;
+                    case '/': res = b !== 0 ? a / b : 'Err'; break;
+                }
+                window.calcCurrent = res.toString();
+                window.calcDisplayEl.innerText = window.calcCurrent;
+                window.calcPrev = null;
+                window.calcOperator = null;
+                window.calcResetNext = true;
+            }
+        };
+
+        window.calcClear = function() {
+            window.calcCurrent = '0';
+            window.calcPrev = null;
+            window.calcOperator = null;
+            window.calcDisplayEl.innerText = window.calcCurrent;
+        };
+
+        function createPaint() {
+            const html = `
+                <div style="display: flex; flex-direction: column; height: 100%;">
+                    <div class="paint-toolbar">
+                        <div class="color-btn" style="background: var(--win-black);" onclick="window.paintColor='black'"></div>
+                        <div class="color-btn" style="background: var(--win-white);" onclick="window.paintColor='white'"></div>
+                        <div class="color-btn" style="background: var(--win-cyan);" onclick="window.paintColor='#00AAAA'"></div>
+                        <div class="color-btn" style="background: var(--win-blue);" onclick="window.paintColor='#0000AA'"></div>
+                        <div class="color-btn" style="background: red;" onclick="window.paintColor='red'"></div>
+                    </div>
+                    <div class="content-area" style="overflow: hidden; cursor: crosshair; touch-action: none;" id="paint-canvas-container">
+                        <canvas class="paint-canvas" id="paintCanvas" width="800" height="600"></canvas>
+                    </div>
+                </div>
+            `;
+            const win = createWindow('Paint', html, 350, 300, 300, 100, [
+                { label: 'File', items: [{ label: 'New', action: 'new' }, { label: 'Exit', action: 'exit' }] }
+            ]);
+
+            const canvas = win.querySelector('#paintCanvas');
+            const ctx = canvas.getContext('2d');
+            let isDrawing = false;
+            window.paintColor = 'black';
+
+            // Fill white background
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const startDrawing = (e) => {
+                isDrawing = true;
+                ctx.beginPath();
+                ctx.moveTo(e.offsetX, e.offsetY);
+            };
+
+            const draw = (e) => {
+                if (!isDrawing) return;
+                ctx.lineTo(e.offsetX, e.offsetY);
+                ctx.strokeStyle = window.paintColor;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            };
+
+            const stopDrawing = () => isDrawing = false;
+
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+        }
+
+        function createClock() {
+            const html = `
+                <div class="clock-container">
+                    <canvas id="clockCanvas" width="150" height="150"></canvas>
+                </div>
+            `;
+            const win = createWindow('Clock', html, 200, 200, 250, 200, []);
+            const canvas = win.querySelector('#clockCanvas');
+            const ctx = canvas.getContext('2d');
+            const radius = canvas.height / 2;
+            ctx.translate(radius, radius);
+            const r = radius * 0.90;
+
+            function drawClock() {
+                if(!document.body.contains(canvas)) return; // Stop if closed
+
+                // Draw face
+                ctx.beginPath();
+                ctx.arc(0, 0, r, 0, 2 * Math.PI);
+                ctx.fillStyle = 'white';
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = 'black';
+                ctx.stroke();
+
+                // Draw center
+                ctx.beginPath();
+                ctx.arc(0, 0, 3, 0, 2 * Math.PI);
+                ctx.fillStyle = 'black';
+                ctx.fill();
+
+                // Get time
+                const now = new Date();
+                let hour = now.getHours();
+                let minute = now.getMinutes();
+                let second = now.getSeconds();
+
+                // Hour
+                hour = hour % 12;
+                hour = (hour * Math.PI / 6) + (minute * Math.PI / (6 * 60)) + (second * Math.PI / (360 * 60));
+                drawHand(ctx, hour, r * 0.5, 4);
+
+                // Minute
+                minute = (minute * Math.PI / 30) + (second * Math.PI / (30 * 60));
+                drawHand(ctx, minute, r * 0.8, 2);
+
+                // Second
+                second = (second * Math.PI / 30);
+                drawHand(ctx, second, r * 0.9, 1);
+
+                requestAnimationFrame(drawClock);
+            }
+
+            function drawHand(ctx, pos, length, width) {
+                ctx.beginPath();
+                ctx.lineWidth = width;
+                ctx.lineCap = "square";
+                ctx.moveTo(0, 0);
+                ctx.rotate(pos);
+                ctx.lineTo(0, -length);
+                ctx.stroke();
+                ctx.rotate(-pos);
+            }
+
+            drawClock();
+        }
+
+    </script>
+</body>
+</html>
